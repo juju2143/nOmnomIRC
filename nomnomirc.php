@@ -1,6 +1,6 @@
 <?php
 // Configure stuff here
-$cookiepath = ".config/google-chrome/Default/Cookies"; // Path of the login cookie
+$cookiepath = "../.config/google-chrome/Default/Cookies"; // Path of the login cookie
 $cookiehost = "www.omnimaga.org";
 $browser = "chrome"; //"chrome" or "firefox" or "other"
 $cookieother = "SMFCookie666=JustPasteYourOmnimagaCookieHere;"; //if you selected "other" then paste your Omnimaga cookie here
@@ -214,10 +214,10 @@ function rl_completion($string, $index)
 }
 
 ncurses_init();
-if (ncurses_has_colors())
+if(ncurses_has_colors())
 {
-ncurses_start_color();
-ncurses_init_pair(1, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);
+	ncurses_start_color();
+	ncurses_init_pair(1, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);
 }
 //$fp = fopen("php://stdin","r");
 //stream_set_blocking($fp,0);
@@ -236,22 +236,22 @@ $userList = Array();
 
 if($browser == "chrome" || $browser == "firefox")
 {
-$db = new SQLite3($cookiepath);
-if($browser == "chrome")
-$sql = $db->prepare("select name,value from cookies where host_key like :host;");
-else if($browser == "firefox")
-$sql = $db->prepare("select name,value from moz_cookies where host like :host;");
-$sql->bindValue(":host", "%".$cookiehost);
-$result = $sql->execute();
-while($res = $result->fetchArray(SQLITE3_ASSOC)){
-$cookie .= $res['name']."=".$res['value']."; ";
-}
-$sql->close();
-$db->close();
+	$db = new SQLite3($cookiepath);
+	if($browser == "chrome")
+		$sql = $db->prepare("select name,value from cookies where host_key like :host;");
+	else if($browser == "firefox")
+		$sql = $db->prepare("select name,value from moz_cookies where host like :host;");
+	$sql->bindValue(":host", "%".$cookiehost);
+	$result = $sql->execute();
+	while($res = $result->fetchArray(SQLITE3_ASSOC)){
+		$cookie .= $res['name']."=".$res['value']."; ";
+	}
+	$sql->close();
+	$db->close();
 }
 else
 {
-$cookie=$cookieother;
+	$cookie=$cookieother;
 }
 
 $context = stream_context_create(array('http' => array('header' => "Cookie: ".$cookie."\r\nConnection: close\r\n")));
@@ -283,16 +283,16 @@ ncurses_wmove($inputwin,0,$rl_info['point']);
 
 if(microtime(true) > $time+$updatedelay)
 {
-@$newmsg = trim(file_get_contents("http://omnomirc.www.omnimaga.org/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $contextto),"\x7f..\xff");
-if($newmsg != "")
-{
-$msgs = explode("\n",$newmsg);
-foreach($msgs as $msg)
-{
-	if($msg != "") addLine($msg);
-}
-}
-$time = microtime(true);
+	@$newmsg = trim(file_get_contents("http://omnomirc.www.omnimaga.org/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $contextto),"\x7f..\xff");
+	if($newmsg != "")
+	{
+		$msgs = explode("\n",$newmsg);
+		foreach($msgs as $msg)
+		{
+			if($msg != "") addLine($msg);
+		}
+	}
+	$time = microtime(true);
 }
 
 ncurses_mvwaddstr($statwin,0,0,str_pad("-[".date("H:i:s")."]- -[".$sig[1]."(".$sig[2].")]- -[".$channel." (".count($userList)." users)]- -[curline:".$curLine."]-",$x," "));
