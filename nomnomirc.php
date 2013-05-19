@@ -1,7 +1,8 @@
 <?php
 // Configure stuff here
-$cookiepath = "../.config/google-chrome/Default/Cookies"; // Path of the login cookie
+$cookiepath = $_SERVER["HOME"]."/.config/google-chrome/Default/Cookies"; // Path of the login cookie
 $cookiehost = "www.omnimaga.org";
+$url = "http://omnomirc.www.omnimaga.org";
 $browser = "chrome"; //"chrome" or "firefox" or "other"
 $cookieother = "SMFCookie666=JustPasteYourOmnimagaCookieHere;"; //if you selected "other" then paste your Omnimaga cookie here
 $channel = "#omnimaga"; // default channel
@@ -11,7 +12,7 @@ $updatedelay = 2;
 // Ok now stop configuring and have fun :P
 
 /*
-    nOmnomIRC 0.1, a ncurses client for OmnomIRC
+    nOmnomIRC 0.1.1, a ncurses client for OmnomIRC
     Copyright (C) 2013 Julien "Juju" Savard
 
     This program is free software: you can redistribute it and/or modify
@@ -28,16 +29,29 @@ $updatedelay = 2;
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+
+function color_of($name)
+{
+	$rcolors = Array(19, 20, 22, 24, 25, 26, 27, 28, 29);
+	$i = 0; $sum = 0;
+
+	for($i=0;$i<strlen($name);$i++)
+		$sum += $name[$i++];
+	$sum %= count($rcolors);
+	return $rcolors[$sum];
+}
+
 function parseColors($str)
 {
+	//global $x;
 	//TODO: add colors
+	//return wordwrap(html_entity_decode($str), $x-12, "\n", true);
 	return html_entity_decode($str);
 }
 
 function colorNick($str)
 {
-	//TODO: add colors
-	return html_entity_decode($str);
+	return chr(3).color_of($str).html_entity_decode($str).chr(3);
 }
 
 function base64_url_encode($input) {
@@ -46,6 +60,14 @@ function base64_url_encode($input) {
 
 function base64_url_decode($input) {
 	return base64_decode(strtr($input, '-_,', '+/=')); 
+}
+
+function rmBOM($string) { 
+	if(substr($string,0,3) == pack("CCC",0xef,0xbb,0xbf))
+	{
+		$string=substr($string, 3);
+	}
+	return $string;
 }
 
 function void($a=null){}
@@ -62,11 +84,9 @@ function addLine($message)
 {	
 	global $curLine,$lines,$topicwin;
 	$line = explode(":", $message);
-	if($line[1] == "topic")
-		ncurses_mvwaddstr($topicwin,0,0,base64_url_decode($line[5]));
+	if($line[1] == "topic") ncurses_mvwaddstr($topicwin,0,0,base64_url_decode($line[5]));
 	else if(parseMessage($message) == "") void(0);
-	else
-		$lines[] = $message;
+	else $lines[] = $message;
 	$curLine = $line[0];
 }
 
@@ -151,7 +171,7 @@ function parseMessage($message, $parseUL=true)
 
 function rl_callback($ret)
 {
-global $mainwin, $inputwin, $running, $sig, $context, $channel, $lines, $userList, $curLine, $context;
+global $mainwin, $inputwin, $running, $sig, $context, $channel, $lines, $userList, $curLine, $context, $url;
 if($ret != "")
 {
 	ncurses_werase($inputwin);
@@ -166,11 +186,11 @@ if($ret != "")
 		$channel = substr($ret,3);
 		$lines = Array();
 		$userList = Array();
-		eval(trim(file_get_contents("http://omnomirc.www.omnimaga.org/Load.php?count=150&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&time=".time(), false, $context ),"\x7f..\xff"));
+		eval(rmBOM(file_get_contents($url."/Load.php?count=150&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&time=".time(), false, $context)));
 	}
 	else if($ret == "/update")
 	{
-		$newmsg = trim(file_get_contents("http://omnomirc.www.omnimaga.org/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $context ),"\x7f..\xff");
+		$newmsg = rmBOM(file_get_contents($url."/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $context));
 		if($newmsg != "")
 		{
 			$msgs = explode("\n",$newmsg);
@@ -188,8 +208,7 @@ if($ret != "")
 	{
 		if($sig[1]!="Guest")
 		{
-			$url = "http://omnomirc.www.omnimaga.org/message.php?nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&message=".base64_url_encode($ret)."&channel=".base64_url_encode($channel)."&id=".$sig[2];
-			$return = file_get_contents($url, false, $context);
+			$return = rmBOM(file_get_contents($url."/message.php?nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&message=".base64_url_encode($ret)."&channel=".base64_url_encode($channel)."&id=".$sig[2], false, $context));
 		}
 		else
 		{
@@ -214,10 +233,24 @@ function rl_completion($string, $index)
 }
 
 ncurses_init();
-if(ncurses_has_colors())
+if (ncurses_has_colors())
 {
 	ncurses_start_color();
-	ncurses_init_pair(1, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(1, NCURSES_COLOR_BLACK, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(2, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(3, NCURSES_COLOR_GREEN, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(4, NCURSES_COLOR_RED, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(5, NCURSES_COLOR_RED, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(6, NCURSES_COLOR_MAGENTA, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(7, NCURSES_COLOR_YELLOW, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(8, NCURSES_COLOR_YELLOW, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(9, NCURSES_COLOR_BLACK, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(10, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(11, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(12, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(13, NCURSES_COLOR_MAGENTA, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(14, NCURSES_COLOR_WHITE, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(15, NCURSES_COLOR_WHITE, NCURSES_COLOR_BLACK);
 }
 //$fp = fopen("php://stdin","r");
 //stream_set_blocking($fp,0);
@@ -256,14 +289,12 @@ else
 
 $context = stream_context_create(array('http' => array('header' => "Cookie: ".$cookie."\r\nConnection: close\r\n")));
 $contextto = stream_context_create(array('http' => array('header' => "Connection: close\r\n", 'timeout' => $timeout)));
-//$sig = explode("\n", file_get_contents("http://www.omnimaga.org/checkLogin.php?txt", false, $context));
-eval(trim(file_get_contents("http://www.omnimaga.org/checkLogin.php", false, $context),"\x7f..\xff"));
+eval(rmBOM(file_get_contents("http://www.omnimaga.org/checkLogin.php", false, $context)));
 
 readline_callback_handler_install("", 'rl_callback');
 readline_completion_function('rl_completion');
 
-//$page = html_entity_decode(strip_tags(str_replace("</td>","\n",str_replace("autofocus>Click here to write a message</a>","></a>",file_get_contents("http://www.omnimaga.org/checkLogin.php?textmode", false, $context)))));
-eval(trim(file_get_contents("http://omnomirc.www.omnimaga.org/Load.php?count=150&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&time=".time(), false, $context),"\x7f..\xff"));
+eval(rmBOM(file_get_contents($url."/Load.php?count=150&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0])."&time=".time(), false, $context)));
 ncurses_wrefresh($topicwin);
 ncurses_wrefresh($mainwin);
 ncurses_wrefresh($userwin);
@@ -272,52 +303,71 @@ ncurses_wrefresh($inputwin);
 
 while($running)
 {
-$w = NULL;
-$e = NULL;
-$n = stream_select($r = array(STDIN), $w, $e, 0);
-if($n>0 && in_array(STDIN, $r)) readline_callback_read_char();
-$rl_info = readline_info();
-ncurses_werase($inputwin);
-ncurses_mvwaddstr($inputwin,0,0,$rl_info['line_buffer']);
-ncurses_wmove($inputwin,0,$rl_info['point']);
+	$w = NULL;
+	$e = NULL;
+	$n = stream_select($r = array(STDIN), $w, $e, 0);
+	if($n>0 && in_array(STDIN, $r)) readline_callback_read_char();
+	$rl_info = readline_info();
+	ncurses_werase($inputwin);
+	ncurses_mvwaddstr($inputwin,0,0,$rl_info['line_buffer']);
+	ncurses_wmove($inputwin,0,$rl_info['point']);
 
-if(microtime(true) > $time+$updatedelay)
-{
-	@$newmsg = trim(file_get_contents("http://omnomirc.www.omnimaga.org/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $contextto),"\x7f..\xff");
-	if($newmsg != "")
+	if(microtime(true) > $time+$updatedelay)
 	{
-		$msgs = explode("\n",$newmsg);
-		foreach($msgs as $msg)
+		@$newmsg = rmBOM(file_get_contents($url."/Update.php?lineNum=".$curLine."&channel=".base64_url_encode($channel)."&nick=".base64_url_encode($sig[1])."&signature=".base64_url_encode($sig[0]), false, $contextto));
+		if($newmsg != "")
 		{
-			if($msg != "") addLine($msg);
+			$msgs = explode("\n",$newmsg);
+			foreach($msgs as $msg)
+			{
+				if($msg != "") addLine($msg);
+			}
 		}
+		$time = microtime(true);
 	}
-	$time = microtime(true);
-}
 
-ncurses_mvwaddstr($statwin,0,0,str_pad("-[".date("H:i:s")."]- -[".$sig[1]."(".$sig[2].")]- -[".$channel." (".count($userList)." users)]- -[curline:".$curLine."]-",$x," "));
-for($i = (count($lines)-($y-3)<0?0:count($lines)-($y-3)); $i<count($lines); $i++)
-{
-	ncurses_mvwaddstr($mainwin,$i-(count($lines)-($y-3)),0,str_pad(parseMessage($lines[$i], false),$x-12," "));
-}
-$userOffset = 0;
-$i = 0;
-//for($i = 0;$i<count($userList);$i++)
-foreach($userList as $users)
-{
-	$user = explode(":", $users);
-	ncurses_color_set(1);
-	ncurses_mvwaddstr($userwin,$i,0,($user[1]?"σ":" "));
-	ncurses_color_set(0);
-	ncurses_mvwaddstr($userwin,$i,1,str_pad(base64_url_decode($user[0]),11," "));
-	$i++;
-}
-ncurses_wrefresh($topicwin);
-ncurses_wrefresh($mainwin);
-ncurses_wrefresh($userwin);
-ncurses_wrefresh($statwin);
-ncurses_wrefresh($inputwin);
-usleep(10000);
+	ncurses_mvwaddstr($statwin,0,0,str_pad("-[".date("H:i:s")."]- -[".$sig[1]."(".$sig[2].")]- -[".$channel." (".count($userList)." users)]- -[curline:".$curLine."]-",$x," "));
+	for($i = (count($lines)-($y-3)<0?0:count($lines)-($y-3)); $i<count($lines); $i++)
+	{
+		$str = parseMessage($lines[$i], false);
+		$j = 0;
+		$regexp = "/([\x02\x1F\x0F\x16]|\x03[0-9]{1,2},[0-9]{1,2}|\x03[0-9]{1,2}|\x03)/";
+		$parts = preg_split($regexp, $str, null, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
+		foreach($parts as $part)
+		{
+			if($part[0] == chr(3))
+			{
+				$color = explode(",", substr($part, 1));
+				if(!isset($color[0])) $color=0;
+				ncurses_wcolor_set($mainwin, $color[0]%16);
+			}
+			else
+			{
+				ncurses_mvwaddstr($mainwin,$i-(count($lines)-($y-3)),$j,$part);
+				$j+=strlen($part);
+			}
+		}
+		ncurses_wcolor_set($mainwin, 0);		
+		ncurses_mvwaddstr($mainwin,$i-(count($lines)-($y-3)),$j,str_pad("",$x-12-$j));
+	}
+	$userOffset = 0;
+	$i = 0;
+	//for($i = 0;$i<count($userList);$i++)
+	foreach($userList as $users)
+	{
+		$user = explode(":", $users);
+		ncurses_wcolor_set($userwin, 2);
+		ncurses_mvwaddstr($userwin,$i,0,($user[1]?"σ":" "));
+		ncurses_wcolor_set($userwin, 0);
+		ncurses_mvwaddstr($userwin,$i,1,str_pad(base64_url_decode($user[0]),11," "));
+		$i++;
+	}
+	ncurses_wrefresh($topicwin);
+	ncurses_wrefresh($mainwin);
+	ncurses_wrefresh($userwin);
+	ncurses_wrefresh($statwin);
+	ncurses_wrefresh($inputwin);
+	usleep(10000);
 }
 readline_callback_handler_remove();
 ncurses_end();
