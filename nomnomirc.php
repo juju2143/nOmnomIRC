@@ -1,6 +1,6 @@
 <?php
 // Configure stuff here
-$cookiepath = $_SERVER["HOME"]."/.config/google-chrome/Default/Cookies"; // Path of the login cookie
+$cookiepath = $_SERVER["HOME"]."/.config/google-chrome/Default/Cookies"; // Path of the login cookie for Chrome or Firefox
 $cookiehost = "www.omnimaga.org";
 $url = "http://omnomirc.www.omnimaga.org";
 $browser = "chrome"; //"chrome" or "firefox" or "other"
@@ -32,13 +32,14 @@ $updatedelay = 2;
 
 function color_of($name)
 {
-	$rcolors = Array(19, 20, 22, 24, 25, 26, 27, 28, 29);
+	//$rcolors = Array(19, 20, 22, 24, 25, 26, 27, 28, 29);
+	$rcolors = Array(3, 4, 6, 8, 9, 10, 11, 12, 13);
 	$i = 0; $sum = 0;
 
 	for($i=0;$i<strlen($name);$i++)
-		$sum += $name[$i++];
+		$sum += ord($name[$i++]);
 	$sum %= count($rcolors);
-	return $rcolors[$sum];
+	return str_pad($rcolors[$sum], 2, 0, STR_PAD_LEFT);
 }
 
 function parseColors($str)
@@ -51,7 +52,7 @@ function parseColors($str)
 
 function colorNick($str)
 {
-	return chr(3).color_of($str).html_entity_decode($str).chr(3);
+	return chr(3).color_of(html_entity_decode($str)).html_entity_decode($str).chr(15);
 }
 
 function base64_url_encode($input) {
@@ -84,7 +85,7 @@ function addLine($message)
 {	
 	global $curLine,$lines,$topicwin;
 	$line = explode(":", $message);
-	if($line[1] == "topic") ncurses_mvwaddstr($topicwin,0,0,base64_url_decode($line[5]));
+	if($line[1] == "topic") printColor($topicwin,0,0,base64_url_decode($line[5]));
 	else if(parseMessage($message) == "") void(0);
 	else $lines[] = $message;
 	$curLine = $line[0];
@@ -115,7 +116,7 @@ function parseMessage($message, $parseUL=true)
 	$lnumber = $parts[0];
 	$type = count($parts)>1?$parts[1]:"";
 	$online = count($parts)>2?$parts[2]:"";
-	$date = count($parts)>3?date("[H:i:s] ",$parts[3]):"";
+	$date = count($parts)>3?(date("[H:i:s]",$parts[3]).($online?chr(3)."02o".chr(15):" ")):"";
 	$parsedMessage = "";
 	if(count($parts)>4)
 	for($i = 4; $i<count($parts); $i++)
@@ -232,28 +233,84 @@ function rl_completion($string, $index)
 	return $array;
 }
 
+function printColor($win, $posx, $posy, $str, $strpad=false)
+{
+	global $x, $y;
+	$j = $posy; $bold = false; $reverse = false; $uline = false;
+	ncurses_wattroff($win,NCURSES_A_DIM|NCURSES_A_BOLD|NCURSES_A_REVERSE|NCURSES_A_UNDERLINE);
+	//ncurses_wattron($win,NCURSES_A_BOLD);
+	$regexp = "/([\x02\x1F\x0F\x16]|\x03[0-9]{1,2},[0-9]{1,2}|\x03[0-9]{1,2}|\x03)/";
+	$parts = preg_split($regexp, $str, null, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
+	foreach($parts as $part)
+	{
+		if($part[0] == chr(3))
+		{
+			$color = explode(",", substr($part, 1));
+			if(!isset($color[0])) $color=0;
+			ncurses_wcolor_set($win, $color[0]%16);
+			if(!in_array($color[0]%16, array(0,4,8,9,11,12,13,14)))
+				ncurses_wattron($win,NCURSES_A_DIM);
+			else
+				ncurses_wattroff($win,NCURSES_A_DIM);
+		}
+		else if($part[0] == chr(2))
+		{
+			if(!$bold) ncurses_wattron($win,NCURSES_A_BOLD);
+			else ncurses_wattroff($win,NCURSES_A_BOLD);
+			$bold = !$bold;
+		}
+		else if($part[0] == chr(15))
+		{
+			ncurses_wcolor_set($win, 0);
+			ncurses_wattroff($win,NCURSES_A_DIM|NCURSES_A_BOLD|NCURSES_A_REVERSE|NCURSES_A_UNDERLINE);
+			//ncurses_wattron($win,NCURSES_A_BOLD);
+		}
+		else if($part[0] == chr(22))
+		{
+			if(!$reverse) ncurses_wattron($win,NCURSES_A_REVERSE);
+			else ncurses_wattroff($win,NCURSES_A_REVERSE);
+			$reverse = !$reverse;
+		}
+		else if($part[0] == chr(31))
+		{
+			if(!$uline) ncurses_wattron($win,NCURSES_A_UNDERLINE);
+			else ncurses_wattroff($win,NCURSES_A_UNDERLINE);
+			$uline = !$uline;
+		}
+		else
+		{
+			ncurses_mvwaddstr($win,$posx,$j,$part);
+			$j+=strlen($part);
+		}
+	}
+	ncurses_wcolor_set($win, 0);
+	ncurses_wattroff($win,NCURSES_A_DIM|NCURSES_A_BOLD|NCURSES_A_REVERSE|NCURSES_A_UNDERLINE);
+	//ncurses_wattron($win,NCURSES_A_BOLD);
+	$bold = false; $reverse = false; $uline = false;
+	if($strpad) ncurses_mvwaddstr($win,$posx,$j,str_pad("",$x-12-$j));
+}
+
 ncurses_init();
 if (ncurses_has_colors())
 {
 	ncurses_start_color();
+	ncurses_assume_default_colors(NCURSES_COLOR_WHITE, NCURSES_COLOR_BLACK);
 	ncurses_init_pair(1, NCURSES_COLOR_BLACK, NCURSES_COLOR_BLACK);
 	ncurses_init_pair(2, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);
 	ncurses_init_pair(3, NCURSES_COLOR_GREEN, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(4, NCURSES_COLOR_RED, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(4, NCURSES_COLOR_RED, NCURSES_COLOR_BLACK);//bold
 	ncurses_init_pair(5, NCURSES_COLOR_RED, NCURSES_COLOR_BLACK);
 	ncurses_init_pair(6, NCURSES_COLOR_MAGENTA, NCURSES_COLOR_BLACK);
 	ncurses_init_pair(7, NCURSES_COLOR_YELLOW, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(8, NCURSES_COLOR_YELLOW, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(9, NCURSES_COLOR_BLACK, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(8, NCURSES_COLOR_YELLOW, NCURSES_COLOR_BLACK);//bold
+	ncurses_init_pair(9, NCURSES_COLOR_GREEN, NCURSES_COLOR_BLACK);//bold
 	ncurses_init_pair(10, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(11, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(12, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(13, NCURSES_COLOR_MAGENTA, NCURSES_COLOR_BLACK);
-	ncurses_init_pair(14, NCURSES_COLOR_WHITE, NCURSES_COLOR_BLACK);
+	ncurses_init_pair(11, NCURSES_COLOR_CYAN, NCURSES_COLOR_BLACK);//bold
+	ncurses_init_pair(12, NCURSES_COLOR_BLUE, NCURSES_COLOR_BLACK);//bold
+	ncurses_init_pair(13, NCURSES_COLOR_MAGENTA, NCURSES_COLOR_BLACK);//bold
+	ncurses_init_pair(14, NCURSES_COLOR_BLACK, NCURSES_COLOR_BLACK);//bold
 	ncurses_init_pair(15, NCURSES_COLOR_WHITE, NCURSES_COLOR_BLACK);
 }
-//$fp = fopen("php://stdin","r");
-//stream_set_blocking($fp,0);
 $topicwin = ncurses_newwin(0,0,0,0);
 ncurses_getmaxyx($topicwin, $y, $x);
 $mainwin = ncurses_newwin($y-3,$x,1,0);
@@ -326,29 +383,11 @@ while($running)
 		$time = microtime(true);
 	}
 
-	ncurses_mvwaddstr($statwin,0,0,str_pad("-[".date("H:i:s")."]- -[".$sig[1]."(".$sig[2].")]- -[".$channel." (".count($userList)." users)]- -[curline:".$curLine."]-",$x," "));
+	printColor($statwin,0,0,str_pad("-[".date("H:i:s")."]- -[".$sig[1]."(".$sig[2].")]- -[".$channel." (".count($userList)." users)]- -[curline:".$curLine."]-",$x," "));
 	for($i = (count($lines)-($y-3)<0?0:count($lines)-($y-3)); $i<count($lines); $i++)
 	{
 		$str = parseMessage($lines[$i], false);
-		$j = 0;
-		$regexp = "/([\x02\x1F\x0F\x16]|\x03[0-9]{1,2},[0-9]{1,2}|\x03[0-9]{1,2}|\x03)/";
-		$parts = preg_split($regexp, $str, null, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
-		foreach($parts as $part)
-		{
-			if($part[0] == chr(3))
-			{
-				$color = explode(",", substr($part, 1));
-				if(!isset($color[0])) $color=0;
-				ncurses_wcolor_set($mainwin, $color[0]%16);
-			}
-			else
-			{
-				ncurses_mvwaddstr($mainwin,$i-(count($lines)-($y-3)),$j,$part);
-				$j+=strlen($part);
-			}
-		}
-		ncurses_wcolor_set($mainwin, 0);		
-		ncurses_mvwaddstr($mainwin,$i-(count($lines)-($y-3)),$j,str_pad("",$x-12-$j));
+		printColor($mainwin,$i-(count($lines)-($y-3)),0,$str,true);
 	}
 	$userOffset = 0;
 	$i = 0;
